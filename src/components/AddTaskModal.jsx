@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import axios from "axios";
+import { useState } from "react";
+import { createTask } from "../lib/api";
 
 const AddTaskModal = ({ isOpen, onClose, refreshTasks }) => {
   const [form, setForm] = useState({
@@ -18,12 +18,10 @@ const AddTaskModal = ({ isOpen, onClose, refreshTasks }) => {
 
     try {
       setError("");
-      await axios.post("https://google-sheet-hkcm.onrender.com/tasks", form, {
-        timeout: 5000,
-      });
+      await createTask(form);
 
       refreshTasks?.();
-      onClose(); // modal close
+      onClose();
 
       setForm({ title: "", description: "", dueDate: "" });
     } catch (error) {
