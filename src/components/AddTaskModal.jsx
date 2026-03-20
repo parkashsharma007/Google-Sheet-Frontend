@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createTask } from "../lib/api";
 
-const AddTaskModal = ({ isOpen, onClose, refreshTasks }) => {
+const AddTaskModal = ({ isOpen, onClose, refreshTasks, showToast }) => {
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -12,7 +12,6 @@ const AddTaskModal = ({ isOpen, onClose, refreshTasks }) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -22,13 +21,15 @@ const AddTaskModal = ({ isOpen, onClose, refreshTasks }) => {
 
       refreshTasks?.();
       onClose();
+      showToast?.("New task successfully add ho gaya.");
 
       setForm({ title: "", description: "", dueDate: "" });
     } catch (error) {
-      setError(
+      const errorMessage =
         error.response?.data?.message ||
-          "Task save nahi hua. Backend server ya database connection check karo."
-      );
+          "Task save nahi hua. Backend server ya database connection check karo.";
+      setError(errorMessage);
+      showToast?.(errorMessage, "error");
     }
   };
 

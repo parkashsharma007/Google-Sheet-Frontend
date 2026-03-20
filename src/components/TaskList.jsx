@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { loadTasks, removeTask, updateTask } from "../lib/api";
 
-const TaskList = ({ refreshKey }) => {
+const TaskList = ({ refreshKey, showToast }) => {
   const [tasks, setTasks] = useState([]);
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -41,11 +41,13 @@ const TaskList = ({ refreshKey }) => {
   const deleteTask = async (id) => {
     try {
       await removeTask(id);
+      showToast?.("Task successfully delete ho gaya.");
       fetchTasks();
     } catch (err) {
-      setError(
-        err.response?.data?.message || "Task delete nahi hua. Dobara try karo."
-      );
+      const message =
+        err.response?.data?.message || "Task delete nahi hua. Dobara try karo.";
+      setError(message);
+      showToast?.(message, "error");
     }
   };
 
@@ -54,12 +56,18 @@ const TaskList = ({ refreshKey }) => {
       await updateTask(task._id, {
         completed: !task.completed,
       });
+      showToast?.(
+        task.completed
+          ? "Task pending me move ho gaya."
+          : "Task completed mark ho gaya."
+      );
       fetchTasks();
     } catch (err) {
-      setError(
+      const message =
         err.response?.data?.message ||
-          "Task status update nahi hua. Dobara try karo."
-      );
+        "Task status update nahi hua. Dobara try karo.";
+      setError(message);
+      showToast?.(message, "error");
     }
   };
 
@@ -79,12 +87,14 @@ const TaskList = ({ refreshKey }) => {
     try {
       await updateTask(editingTask._id, editForm);
       setEditingTask(null);
+      showToast?.("Task successfully update ho gaya.");
       fetchTasks();
     } catch (err) {
-      setError(
+      const message =
         err.response?.data?.message ||
-          "Task update nahi hua. Dobara try karo."
-      );
+        "Task update nahi hua. Dobara try karo.";
+      setError(message);
+      showToast?.(message, "error");
     }
   };
 

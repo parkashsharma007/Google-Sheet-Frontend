@@ -8,7 +8,7 @@ const TASK_FIELDS = [
   { value: "completed", label: "Completed" },
 ];
 
-const Importsheet = ({ refreshTasks }) => {
+const Importsheet = ({ refreshTasks, showToast }) => {
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState("success");
@@ -18,8 +18,10 @@ const Importsheet = ({ refreshTasks }) => {
 
   const handlePreview = async () => {
     if (!url.trim()) {
-      setMessage("Pehle Google Sheet link paste karo.");
+      const emptyMessage = "Pehle Google Sheet link paste karo.";
+      setMessage(emptyMessage);
       setMessageType("error");
+      showToast?.(emptyMessage, "error");
       return;
     }
 
@@ -52,16 +54,19 @@ const Importsheet = ({ refreshTasks }) => {
 
         return nextMapping;
       });
-      setMessage("Preview ready. Mapping check karke import karo.");
+      const successMessage = "Preview ready. Mapping check karke import karo.";
+      setMessage(successMessage);
+      showToast?.(successMessage);
     } catch (error) {
       setPreview(null);
       setMapping({});
       setMessageType("error");
-      setMessage(
+      const errorMessage =
         error.response?.data?.message ||
           error.message ||
-          "Error importing data"
-      );
+          "Error importing data";
+      setMessage(errorMessage);
+      showToast?.(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
@@ -69,8 +74,10 @@ const Importsheet = ({ refreshTasks }) => {
 
   const handleImport = async () => {
     if (!preview) {
-      setMessage("Pehle preview load karo, phir import karo.");
+      const previewMessage = "Pehle preview load karo, phir import karo.";
+      setMessage(previewMessage);
       setMessageType("error");
+      showToast?.(previewMessage, "error");
       return;
     }
 
@@ -80,16 +87,19 @@ const Importsheet = ({ refreshTasks }) => {
       setMessageType("success");
       const result = await importTasksFromSheet(url, mapping);
       setPreview(result.preview);
-      setMessage(`${result.message} (${result.importedCount} tasks)`);
+      const successMessage = `${result.message} (${result.importedCount} tasks)`;
+      setMessage(successMessage);
+      showToast?.(successMessage);
       refreshTasks?.();
       setUrl("");
     } catch (error) {
       setMessageType("error");
-      setMessage(
+      const errorMessage =
         error.response?.data?.message ||
           error.message ||
-          "Error importing data"
-      );
+          "Error importing data";
+      setMessage(errorMessage);
+      showToast?.(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
