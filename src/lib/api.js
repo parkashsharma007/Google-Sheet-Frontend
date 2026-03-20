@@ -1,7 +1,49 @@
 import axios from "axios";
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:5000";
+const DEFAULT_LOCAL_API_URL = "http://localhost:5000";
+
+const trimTrailingSlash = (value = "") => value.replace(/\/$/, "");
+
+const getRenderBackendUrl = (hostname = "") => {
+  if (!hostname.endsWith(".onrender.com")) {
+    return "";
+  }
+
+  if (hostname.includes("-frontend")) {
+    return `https://${hostname.replace("-frontend", "-backend")}`;
+  }
+
+  if (hostname.includes("frontend")) {
+    return `https://${hostname.replace("frontend", "backend")}`;
+  }
+
+  return "";
+};
+
+const resolveApiBaseUrl = () => {
+  const envApiUrl = trimTrailingSlash(import.meta.env.VITE_API_URL || "");
+  if (envApiUrl) {
+    return envApiUrl;
+  }
+
+  if (typeof window === "undefined") {
+    return DEFAULT_LOCAL_API_URL;
+  }
+
+  const { hostname, origin } = window.location;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return DEFAULT_LOCAL_API_URL;
+  }
+
+  const renderBackendUrl = getRenderBackendUrl(hostname);
+  if (renderBackendUrl) {
+    return renderBackendUrl;
+  }
+
+  return trimTrailingSlash(origin);
+};
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 const normalizeDueDate = (dueDate) => {
   if (!dueDate) {
