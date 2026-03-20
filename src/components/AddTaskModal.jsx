@@ -27,7 +27,8 @@ const AddTaskModal = ({ isOpen, onClose, refreshTasks, showToast }) => {
     } catch (error) {
       const errorMessage =
         error.response?.data?.message ||
-          "Task save nahi hua. Backend server ya database connection check karo.";
+        error.message ||
+        "Task save nahi hua. Backend server ya database connection check karo.";
       setError(errorMessage);
       showToast?.(errorMessage, "error");
     }

@@ -3,8 +3,6 @@ import axios from "axios";
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:5000";
 
-const STORAGE_KEY = "task-manager.tasks";
-
 const normalizeDueDate = (dueDate) => {
   if (!dueDate) {
     return "";
@@ -22,19 +20,6 @@ const normalizeTask = (task) => ({
   completed: Boolean(task.completed),
 });
 
-const readLocalTasks = () => {
-  try {
-    const savedTasks = localStorage.getItem(STORAGE_KEY);
-    return savedTasks ? JSON.parse(savedTasks) : [];
-  } catch {
-    return [];
-  }
-};
-
-const writeLocalTasks = (tasks) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
-};
-
 const getErrorMessage = (error, fallbackMessage) =>
   error.response?.data?.message || error.message || fallbackMessage;
 
@@ -48,11 +33,13 @@ export const loadTasks = async () => {
       tasks: Array.isArray(response.data) ? response.data : [],
       source: "backend",
     };
-  } catch {
-    return {
-      tasks: readLocalTasks(),
-      source: "local",
-    };
+  } catch (error) {
+    throw new Error(
+      getErrorMessage(
+        error,
+        "Tasks load nahi ho pa rahe. Backend ya database connection check karo."
+      )
+    );
   }
 };
 
@@ -65,11 +52,13 @@ export const createTask = async (task) => {
     });
 
     return response.data;
-  } catch {
-    const tasks = readLocalTasks();
-    const nextTasks = [normalizedTask, ...tasks];
-    writeLocalTasks(nextTasks);
-    return normalizedTask;
+  } catch (error) {
+    throw new Error(
+      getErrorMessage(
+        error,
+        "Task save nahi hua. Backend server ya database connection check karo."
+      )
+    );
   }
 };
 
@@ -79,9 +68,10 @@ export const removeTask = async (id) => {
       timeout: 5000,
     });
     return;
-  } catch {
-    const tasks = readLocalTasks().filter((task) => task._id !== id);
-    writeLocalTasks(tasks);
+  } catch (error) {
+    throw new Error(
+      getErrorMessage(error, "Task delete nahi hua. Dobara try karo.")
+    );
   }
 };
 
@@ -91,12 +81,10 @@ export const updateTask = async (id, updates) => {
       timeout: 5000,
     });
     return response.data;
-  } catch {
-    const tasks = readLocalTasks().map((task) =>
-      task._id === id ? { ...task, ...updates } : task
+  } catch (error) {
+    throw new Error(
+      getErrorMessage(error, "Task update nahi hua. Dobara try karo.")
     );
-    writeLocalTasks(tasks);
-    return tasks.find((task) => task._id === id);
   }
 };
 
@@ -299,30 +287,31 @@ export const importTasksFromSheet = async (sheetUrl, mapping = {}) => {
     .map((row) => mapRowToTask(row, mapping))
     .filter((task) => task.title);
 
+  if (importedTasks.length === 0) {
+    throw new Error("Mapping ke baad import karne layak koi valid task nahi mila.");
+  }
+
   try {
-    const response = await axios.post(
-      `${API_BASE_URL}/import`,
-      { sheetUrl },
-      { timeout: 8000 }
+    const responses = await Promise.all(
+      importedTasks.map((task) =>
+        axios.post(`${API_BASE_URL}/tasks`, task, {
+          timeout: 5000,
+        })
+      )
     );
 
     return {
-      importedCount: response.data?.importedCount ?? importedTasks.length,
-      message:
-        response.data?.message || `${importedTasks.length} tasks imported.`,
+      importedCount: responses.length,
+      message: `${responses.length} tasks database me import ho gaye.`,
       preview,
       source: "backend",
     };
-  } catch {
-    const existingTasks = readLocalTasks();
-    const nextTasks = [...importedTasks, ...existingTasks];
-    writeLocalTasks(nextTasks);
-
-    return {
-      importedCount: importedTasks.length,
-      message: `${importedTasks.length} tasks local storage me save hue.`,
-      preview,
-      source: "local",
-    };
+  } catch (error) {
+    throw new Error(
+      getErrorMessage(
+        error,
+        "Tasks import nahi hue. Backend server ya database connection check karo."
+      )
+    );
   }
 };

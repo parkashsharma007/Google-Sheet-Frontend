@@ -10,8 +10,6 @@ const TASK_FIELDS = [
 
 const Importsheet = ({ refreshTasks, showToast }) => {
   const [url, setUrl] = useState("");
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("success");
   const [preview, setPreview] = useState(null);
   const [mapping, setMapping] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -19,16 +17,12 @@ const Importsheet = ({ refreshTasks, showToast }) => {
   const handlePreview = async () => {
     if (!url.trim()) {
       const emptyMessage = "Pehle Google Sheet link paste karo.";
-      setMessage(emptyMessage);
-      setMessageType("error");
       showToast?.(emptyMessage, "error");
       return;
     }
 
     try {
       setIsLoading(true);
-      setMessage("");
-      setMessageType("success");
       const result = await previewSheet(url);
       setPreview(result);
       setMapping((currentMapping) => {
@@ -55,17 +49,14 @@ const Importsheet = ({ refreshTasks, showToast }) => {
         return nextMapping;
       });
       const successMessage = "Preview ready. Mapping check karke import karo.";
-      setMessage(successMessage);
       showToast?.(successMessage);
     } catch (error) {
       setPreview(null);
       setMapping({});
-      setMessageType("error");
       const errorMessage =
         error.response?.data?.message ||
           error.message ||
           "Error importing data";
-      setMessage(errorMessage);
       showToast?.(errorMessage, "error");
     } finally {
       setIsLoading(false);
@@ -75,30 +66,25 @@ const Importsheet = ({ refreshTasks, showToast }) => {
   const handleImport = async () => {
     if (!preview) {
       const previewMessage = "Pehle preview load karo, phir import karo.";
-      setMessage(previewMessage);
-      setMessageType("error");
       showToast?.(previewMessage, "error");
       return;
     }
 
     try {
       setIsLoading(true);
-      setMessage("");
-      setMessageType("success");
       const result = await importTasksFromSheet(url, mapping);
       setPreview(result.preview);
-      const successMessage = `${result.message} (${result.importedCount} tasks)`;
-      setMessage(successMessage);
+      const successMessage = result.message;
       showToast?.(successMessage);
       refreshTasks?.();
       setUrl("");
+      setPreview(null);
+      setMapping({});
     } catch (error) {
-      setMessageType("error");
       const errorMessage =
         error.response?.data?.message ||
           error.message ||
           "Error importing data";
-      setMessage(errorMessage);
       showToast?.(errorMessage, "error");
     } finally {
       setIsLoading(false);
@@ -138,16 +124,6 @@ const Importsheet = ({ refreshTasks, showToast }) => {
           {isLoading ? "Loading..." : "Preview"}
         </button>
       </div>
-
-      {message && (
-        <p
-          className={`mt-4 text-sm font-medium ${
-            messageType === "success" ? "text-green-600" : "text-red-600"
-          }`}
-        >
-          {message}
-        </p>
-      )}
 
       {preview && (
         <div className="mt-6 space-y-6">

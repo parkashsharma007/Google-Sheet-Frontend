@@ -9,6 +9,7 @@ const TaskList = ({ refreshKey, showToast }) => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("dueDateAsc");
   const [editingTask, setEditingTask] = useState(null);
+  const [taskToDelete, setTaskToDelete] = useState(null);
   const [editForm, setEditForm] = useState({
     title: "",
     description: "",
@@ -30,6 +31,7 @@ const TaskList = ({ refreshKey, showToast }) => {
         setCurrentPage(1);
         setError(
           err.response?.data?.message ||
+            err.message ||
             "Tasks load nahi ho pa rahe. Backend ya database connection check karo."
         );
       });
@@ -45,7 +47,9 @@ const TaskList = ({ refreshKey, showToast }) => {
       fetchTasks();
     } catch (err) {
       const message =
-        err.response?.data?.message || "Task delete nahi hua. Dobara try karo.";
+        err.response?.data?.message ||
+        err.message ||
+        "Task delete nahi hua. Dobara try karo.";
       setError(message);
       showToast?.(message, "error");
     }
@@ -65,6 +69,7 @@ const TaskList = ({ refreshKey, showToast }) => {
     } catch (err) {
       const message =
         err.response?.data?.message ||
+        err.message ||
         "Task status update nahi hua. Dobara try karo.";
       setError(message);
       showToast?.(message, "error");
@@ -92,6 +97,7 @@ const TaskList = ({ refreshKey, showToast }) => {
     } catch (err) {
       const message =
         err.response?.data?.message ||
+        err.message ||
         "Task update nahi hua. Dobara try karo.";
       setError(message);
       showToast?.(message, "error");
@@ -229,37 +235,43 @@ const TaskList = ({ refreshKey, showToast }) => {
                   <td className="px-4 py-3">{task.dueDate?.slice(0, 10)}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`rounded px-2 py-1 text-sm text-white ${
-                        task.completed ? "bg-green-500" : "bg-red-500"
+                      className={`rounded-full px-3 py-1 text-sm font-semibold text-white ${
+                        task.completed ? "bg-green-500" : "bg-amber-500"
                       }`}
                     >
                       {task.completed ? "Done" : "Pending"}
                     </span>
                   </td>
-                  <td className="space-x-2 px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => startEditing(task)}
-                      className="rounded bg-amber-500 px-3 py-1 text-white hover:bg-amber-600"
-                    >
-                      Edit
-                    </button>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleComplete(task)}
+                        className={`rounded-full px-3 py-1 text-sm font-medium text-white ${
+                          task.completed
+                            ? "bg-slate-500 hover:bg-slate-600"
+                            : "bg-blue-500 hover:bg-blue-600"
+                        }`}
+                      >
+                        {task.completed ? "Mark Pending" : "Mark Done"}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => toggleComplete(task)}
-                      className="rounded bg-blue-500 px-3 py-1 text-white hover:bg-blue-600"
-                    >
-                      Toggle
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => startEditing(task)}
+                        className="rounded-full bg-amber-500 px-3 py-1 text-sm font-medium text-white hover:bg-amber-600"
+                      >
+                        Edit
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => deleteTask(task._id)}
-                      className="rounded bg-red-500 px-3 py-1 text-white hover:bg-red-600"
-                    >
-                      Delete
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaskToDelete(task)}
+                        className="rounded-full bg-red-500 px-3 py-1 text-sm font-medium text-white hover:bg-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -322,7 +334,16 @@ const TaskList = ({ refreshKey, showToast }) => {
       {editingTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-xl font-bold">Edit Task</h3>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="text-xl font-bold">Edit Task</h3>
+              <button
+                type="button"
+                onClick={() => setEditingTask(null)}
+                className="rounded-full px-3 py-1 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+              >
+                Close
+              </button>
+            </div>
 
             <form onSubmit={handleEditSubmit} className="space-y-4">
               <input
@@ -389,6 +410,38 @@ const TaskList = ({ refreshKey, showToast }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {taskToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h3 className="text-xl font-bold text-gray-900">Delete Task</h3>
+            <p className="mt-3 text-sm text-gray-600">
+              "{taskToDelete.title}" ko delete karna hai? Ye action undo nahi hoga.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTaskToDelete(null)}
+                className="rounded bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  await deleteTask(taskToDelete._id);
+                  setTaskToDelete(null);
+                }}
+                className="rounded bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
