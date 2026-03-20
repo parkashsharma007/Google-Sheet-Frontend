@@ -48,6 +48,8 @@ const Importsheet = ({ refreshTasks, showToast }) => {
 
         return nextMapping;
       });
+      const successMessage = "Preview ready. Mapping check karke import karo.";
+      showToast?.(successMessage);
     } catch (error) {
       setPreview(null);
       setMapping({});
@@ -72,6 +74,8 @@ const Importsheet = ({ refreshTasks, showToast }) => {
       setIsLoading(true);
       const result = await importTasksFromSheet(url, mapping);
       setPreview(result.preview);
+      const successMessage = result.message;
+      showToast?.(successMessage);
       refreshTasks?.();
       setUrl("");
       setPreview(null);
