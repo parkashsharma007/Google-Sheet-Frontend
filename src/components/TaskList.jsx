@@ -23,7 +23,7 @@ const TaskList = ({ refreshKey, showToast }) => {
     loadTasks()
       .then((result) => {
         setTasks(result.tasks);
-        setError("");
+        setError(result.source === "local" ? "" : result.error || "");
         setCurrentPage(1);
       })
       .catch((err) => {

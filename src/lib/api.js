@@ -1,23 +1,28 @@
 import axios from "axios";
 
 const DEFAULT_LOCAL_API_URL = "http://localhost:5000";
+const LOCAL_TASKS_STORAGE_KEY = "tasks";
+const API_TIMEOUT_MS = 5000;
 
 const trimTrailingSlash = (value = "") => value.replace(/\/$/, "");
 
-const getRenderBackendUrl = (hostname = "") => {
+const buildRenderBackendCandidates = (hostname = "") => {
   if (!hostname.endsWith(".onrender.com")) {
-    return "";
+    return [];
   }
 
+  const candidates = new Set();
+
   if (hostname.includes("-frontend")) {
-    return `https://${hostname.replace("-frontend", "-backend")}`;
+    candidates.add(`https://${hostname.replace("-frontend", "-backend")}`);
+    candidates.add(`https://${hostname.replace("-frontend", "")}`);
   }
 
   if (hostname.includes("frontend")) {
-    return `https://${hostname.replace("frontend", "backend")}`;
+    candidates.add(`https://${hostname.replace("frontend", "backend")}`);
   }
 
-  return "";
+  return [...candidates];
 };
 
 const resolveApiBaseUrl = () => {
@@ -35,15 +40,191 @@ const resolveApiBaseUrl = () => {
     return DEFAULT_LOCAL_API_URL;
   }
 
-  const renderBackendUrl = getRenderBackendUrl(hostname);
-  if (renderBackendUrl) {
-    return renderBackendUrl;
-  }
-
   return trimTrailingSlash(origin);
 };
 
-export const API_BASE_URL = resolveApiBaseUrl();
+const STATIC_API_BASE_URL = resolveApiBaseUrl();
+let resolvedApiBaseUrlPromise = null;
+
+const canUseApiResponse = async (baseUrl) => {
+  try {
+    const response = await fetch(`${baseUrl}/`, { method: "GET" });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+const detectApiBaseUrl = async () => {
+  if (typeof window === "undefined") {
+    return STATIC_API_BASE_URL;
+  }
+
+  const envApiUrl = trimTrailingSlash(import.meta.env.VITE_API_URL || "");
+  const { hostname } = window.location;
+
+  if (envApiUrl || hostname === "localhost" || hostname === "127.0.0.1") {
+    return STATIC_API_BASE_URL;
+  }
+
+  const renderCandidates = buildRenderBackendCandidates(hostname);
+
+  for (const candidate of renderCandidates) {
+    if (await canUseApiResponse(candidate)) {
+      return candidate;
+    }
+  }
+
+  return STATIC_API_BASE_URL;
+};
+
+const getApiBaseUrl = async () => {
+  if (!resolvedApiBaseUrlPromise) {
+    resolvedApiBaseUrlPromise = detectApiBaseUrl();
+  }
+
+  return resolvedApiBaseUrlPromise;
+};
+
+export const API_BASE_URL = STATIC_API_BASE_URL;
+
+const buildPathCandidates = (path) => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const candidates = [normalizedPath];
+
+  if (!normalizedPath.startsWith("/api/")) {
+    candidates.push(`/api${normalizedPath}`);
+  }
+
+  return [...new Set(candidates)];
+};
+
+const requestWithFallback = async (requestFactory, path, config = {}) => {
+  const baseUrl = await getApiBaseUrl();
+  const pathCandidates = buildPathCandidates(path);
+  let lastError;
+
+  for (const pathCandidate of pathCandidates) {
+    try {
+      return await requestFactory(`${baseUrl}${pathCandidate}`, config);
+    } catch (error) {
+      lastError = error;
+      if (error.response?.status !== 404) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+const apiGet = async (path, config = {}) =>
+  requestWithFallback(
+    (url, requestConfig) =>
+      axios.get(url, {
+        timeout: API_TIMEOUT_MS,
+        ...requestConfig,
+      }),
+    path,
+    config
+  );
+
+const apiPost = async (path, data, config = {}) =>
+  requestWithFallback(
+    (url, requestConfig) =>
+      axios.post(url, data, {
+        timeout: API_TIMEOUT_MS,
+        ...requestConfig,
+      }),
+    path,
+    config
+  );
+
+const apiPut = async (path, data, config = {}) =>
+  requestWithFallback(
+    (url, requestConfig) =>
+      axios.put(url, data, {
+        timeout: API_TIMEOUT_MS,
+        ...requestConfig,
+      }),
+    path,
+    config
+  );
+
+const apiDelete = async (path, config = {}) =>
+  requestWithFallback(
+    (url, requestConfig) =>
+      axios.delete(url, {
+        timeout: API_TIMEOUT_MS,
+        ...requestConfig,
+      }),
+    path,
+    config
+  );
+
+const getStorage = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage;
+};
+
+const createLocalTaskId = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const readLocalTasks = () => {
+  const storage = getStorage();
+  if (!storage) {
+    return [];
+  }
+
+  try {
+    const rawValue = storage.getItem(LOCAL_TASKS_STORAGE_KEY);
+    const parsedValue = rawValue ? JSON.parse(rawValue) : [];
+    return Array.isArray(parsedValue) ? parsedValue.map(normalizeTask) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalTasks = (tasks) => {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+
+  storage.setItem(LOCAL_TASKS_STORAGE_KEY, JSON.stringify(tasks.map(normalizeTask)));
+};
+
+const upsertLocalTask = (task) => {
+  const existingTasks = readLocalTasks();
+  const normalizedTask = normalizeTask({
+    ...task,
+    _id: task._id || createLocalTaskId(),
+  });
+  const nextTasks = [normalizedTask, ...existingTasks.filter((item) => item._id !== normalizedTask._id)];
+  writeLocalTasks(nextTasks);
+  return normalizedTask;
+};
+
+const updateLocalTask = (id, updates) => {
+  const nextTasks = readLocalTasks().map((task) =>
+    task._id === id ? normalizeTask({ ...task, ...updates, _id: id }) : task
+  );
+  writeLocalTasks(nextTasks);
+  return nextTasks.find((task) => task._id === id) || null;
+};
+
+const removeLocalTaskById = (id) => {
+  const nextTasks = readLocalTasks().filter((task) => task._id !== id);
+  writeLocalTasks(nextTasks);
+};
 
 const normalizeDueDate = (dueDate) => {
   if (!dueDate) {
@@ -55,7 +236,7 @@ const normalizeDueDate = (dueDate) => {
 };
 
 const normalizeTask = (task) => ({
-  _id: task._id || crypto.randomUUID(),
+  _id: task._id || createLocalTaskId(),
   title: task.title?.toString().trim() || "Untitled",
   description: task.description?.toString().trim() || "",
   dueDate: normalizeDueDate(task.dueDate),
@@ -67,21 +248,21 @@ const getErrorMessage = (error, fallbackMessage) =>
 
 export const loadTasks = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/tasks`, {
-      timeout: 5000,
-    });
+    const response = await apiGet("/tasks");
 
     return {
-      tasks: Array.isArray(response.data) ? response.data : [],
+      tasks: Array.isArray(response.data) ? response.data.map(normalizeTask) : [],
       source: "backend",
     };
   } catch (error) {
-    throw new Error(
-      getErrorMessage(
+    return {
+      tasks: readLocalTasks(),
+      source: "local",
+      error: getErrorMessage(
         error,
         "Tasks load nahi ho pa rahe. Backend ya database connection check karo."
-      )
-    );
+      ),
+    };
   }
 };
 
@@ -89,41 +270,35 @@ export const createTask = async (task) => {
   const normalizedTask = normalizeTask(task);
 
   try {
-    const response = await axios.post(`${API_BASE_URL}/tasks`, normalizedTask, {
-      timeout: 5000,
-    });
+    const response = await apiPost("/tasks", normalizedTask);
 
     return response.data;
-  } catch (error) {
-    throw new Error(
-      getErrorMessage(
-        error,
-        "Task save nahi hua. Backend server ya database connection check karo."
-      )
-    );
+  } catch {
+    return upsertLocalTask(normalizedTask);
   }
 };
 
 export const removeTask = async (id) => {
   try {
-    await axios.delete(`${API_BASE_URL}/tasks/${id}`, {
-      timeout: 5000,
-    });
+    await apiDelete(`/tasks/${id}`);
     return;
-  } catch (error) {
-    throw new Error(
-      getErrorMessage(error, "Task delete nahi hua. Dobara try karo.")
-    );
+  } catch {
+    removeLocalTaskById(id);
+    return;
   }
 };
 
 export const updateTask = async (id, updates) => {
   try {
-    const response = await axios.put(`${API_BASE_URL}/tasks/${id}`, updates, {
-      timeout: 5000,
-    });
+    const response = await apiPut(`/tasks/${id}`, updates);
     return response.data;
   } catch (error) {
+    const updatedTask = updateLocalTask(id, updates);
+
+    if (updatedTask) {
+      return updatedTask;
+    }
+
     throw new Error(
       getErrorMessage(error, "Task update nahi hua. Dobara try karo.")
     );
@@ -335,11 +510,7 @@ export const importTasksFromSheet = async (sheetUrl, mapping = {}) => {
 
   try {
     const responses = await Promise.all(
-      importedTasks.map((task) =>
-        axios.post(`${API_BASE_URL}/tasks`, task, {
-          timeout: 5000,
-        })
-      )
+      importedTasks.map((task) => apiPost("/tasks", task))
     );
 
     return {
@@ -348,12 +519,16 @@ export const importTasksFromSheet = async (sheetUrl, mapping = {}) => {
       preview,
       source: "backend",
     };
-  } catch (error) {
-    throw new Error(
-      getErrorMessage(
-        error,
-        "Tasks import nahi hue. Backend server ya database connection check karo."
-      )
-    );
+  } catch {
+    importedTasks.forEach((task) => {
+      upsertLocalTask(task);
+    });
+
+    return {
+      importedCount: importedTasks.length,
+      message: `${importedTasks.length} tasks local storage me save hue.`,
+      preview,
+      source: "local",
+    };
   }
 };
