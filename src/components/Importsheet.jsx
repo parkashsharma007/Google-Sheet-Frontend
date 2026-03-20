@@ -1,20 +1,23 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const Importsheet = () => {
+const Importsheet = ({ refreshTasks }) => {
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState("");
 
-  // 🔹 Import Handler
   const handleImport = async () => {
+    if (!url.trim()) {
+      setMessage("Pehle Google Sheet link paste karo.");
+      return;
+    }
+
     try {
-      const res = await axios.post("http://localhost:5000/import", {
+      const res = await axios.post("https://google-sheet-hkcm.onrender.com/import", {
         sheetUrl: url,
       });
 
-      setMessage(
-        res.data.message + " (" + res.data.importedCount + " tasks)"
-      );
+      setMessage(`${res.data.message} (${res.data.importedCount} tasks)`);
+      refreshTasks?.();
       setUrl("");
     } catch (error) {
       setMessage(error.response?.data?.message || "Error importing data");
@@ -22,36 +25,29 @@ const Importsheet = () => {
   };
 
   return (
-    <div className="bg-white shadow-md rounded-lg p-6 mb-6">
-      
-      {/* Heading */}
-      <h2 className="text-xl font-bold mb-4">
-        📥 Import Tasks from Google Sheet
-      </h2>
+    <div className="mb-6 rounded-lg bg-white p-6 shadow-md">
+      <h2 className="mb-4 text-xl font-bold">Import Tasks from Google Sheet</h2>
 
-      {/* Input + Button */}
-      <div className="flex flex-col md:flex-row gap-3">
+      <div className="flex flex-col gap-3 md:flex-row">
         <input
           type="text"
           placeholder="Paste Google Sheet Link"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="flex-1 rounded border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
 
         <button
+          type="button"
           onClick={handleImport}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition"
+          className="rounded bg-blue-500 px-4 py-2 text-white transition hover:bg-blue-600"
         >
           Import
         </button>
       </div>
 
-      {/* Message */}
       {message && (
-        <p className="mt-4 text-sm text-green-600 font-medium">
-          {message}
-        </p>
+        <p className="mt-4 text-sm font-medium text-green-600">{message}</p>
       )}
     </div>
   );

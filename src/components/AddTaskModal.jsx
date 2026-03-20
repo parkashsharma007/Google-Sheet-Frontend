@@ -18,7 +18,7 @@ const AddTaskModal = ({ isOpen, onClose, refreshTasks }) => {
 
     try {
       setError("");
-      await axios.post("http://localhost:5000/tasks", form, {
+      await axios.post("https://google-sheet-hkcm.onrender.com/tasks", form, {
         timeout: 5000,
       });
 
